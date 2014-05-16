@@ -1,1 +1,13 @@
 /target
+/reports
+.settings
+target/
+.classpath
+.project
+.idea/*
+*.iml
+*.sh
+*.jar
+.DS_Store
+/bin
+/tools
