@@ -11,8 +11,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class StringUtils {
-  private final static String UTF8_STR = Charset.forName("UTF-8").toString();
-  private final static String BIG5_STR = Charset.forName("BIG5").toString();
+  private static final String UTF8_STR = Charset.forName("UTF-8").toString();
+  private static final String BIG5_STR = Charset.forName("BIG5").toString();
+  private static final String UTF8_BOM = "\uFEFF";
 
   public final boolean isStringListContain(List<String> list, final String containPattern) {
     final Pattern pattern = Pattern.compile(containPattern);
@@ -75,4 +76,14 @@ public class StringUtils {
     }
   }
 
+  public static void removeUTF8BOM(List<String> stringList) {
+    stringList.set(0, removeUTF8BOM(stringList.get(0)));
+  }
+
+  public static String removeUTF8BOM(String firstStr) {
+    if (firstStr.startsWith(UTF8_BOM)) {
+      return firstStr.replaceFirst(UTF8_BOM, "");
+    }
+    return firstStr;
+  }
 }
