@@ -12,11 +12,13 @@ import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -31,12 +33,14 @@ import javax.net.ssl.X509TrustManager;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.entity.mime.content.FileBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
 
 import tools.system.SystemUtils;
 import exception.NotFoundException;
@@ -85,15 +89,120 @@ public class HttpUtils {
     return java.net.URLDecoder.decode(url, tools.office.StringUtils.getUTF8String());
   }
 
-  public static final String getMethod(String targetURL) throws IOException {
+  public static final void getMethod(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
     URL url = null;
     HttpURLConnection conn = null;
     try {
-      url = new URL(urlDecode(targetURL));
+      url = new URL(urlDecode(httpRequestCapabilities.getUrl()));
       conn = (HttpURLConnection) url.openConnection();
+      conn.setInstanceFollowRedirects(httpRequestCapabilities.getFollowRedirects());
       conn.setRequestMethod("GET");
-      conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-      return handleRequestResult(conn);
+      if (httpRequestCapabilities.getRequestProperties() == null ||
+          httpRequestCapabilities.getRequestProperties().isEmpty()) {
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+      } else {
+        for (Entry<String, String> entry : httpRequestCapabilities.getRequestProperties().entrySet()) {
+          conn.setRequestProperty(entry.getKey(), entry.getValue());
+        }
+      }
+      handleRequestResult(conn, httpRequestCapabilities);
+    } catch (IOException e) {
+      throw e;
+    } finally {
+      if (conn != null)
+        conn.disconnect();
+    }
+  }
+
+  public static final String getMethod(String targetURL) throws IOException {
+    HttpRequestCapabilities httpRequestCapabilities = new HttpRequestCapabilities(targetURL);
+    getMethod(httpRequestCapabilities);
+    return handleRequestResultInString(httpRequestCapabilities);
+  }
+
+  public static final Map<String, String> queryStringToMap(String query) {
+    Map<String, String> queryPairs = new LinkedHashMap<String, String>();
+    String[] pairs = query.split("&");
+    try {
+      for (String pair : pairs) {
+        int equalIndex = pair.indexOf("=");
+        queryPairs.put(
+            URLDecoder.decode(pair.substring(0, equalIndex),
+                tools.office.StringUtils.getUTF8String()),
+            URLDecoder.decode(pair.substring(equalIndex + 1),
+                tools.office.StringUtils.getUTF8String()));
+      }
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Parsing error:" + e.getMessage());
+    }
+    return queryPairs;
+  }
+
+  public static final String queryMapToString(Map<String, String> postDataMap) throws IOException {
+    ArrayList<String> postData = new ArrayList<String>();
+    Iterator<Entry<String, String>> iterator = postDataMap.entrySet().iterator();
+    Entry<String, String> parameterEntry;
+    String LsA;
+    while (iterator.hasNext()) {
+      parameterEntry = iterator.next();
+      LsA = parameterEntry.getKey() + "=" + URLEncoder.encode(parameterEntry.getValue(), tools.office.StringUtils.getUTF8String());
+      postData.add(LsA);
+    }
+    String urlParameters = "";
+    if (postData.size() == 0) {
+      throw new NotFoundException("postData size = 0");
+    }
+    for (int i = 0; i < postData.size(); i++) {
+      if (i == 0) {
+        urlParameters += postData.get(i);
+      } else {
+        urlParameters += "&" + postData.get(i);
+      }
+    }
+    return urlParameters;
+  }
+
+  public static final void postMethod(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
+    String postContent;
+    if (httpRequestCapabilities.getRequestPostParameters() != null &&
+        !httpRequestCapabilities.getRequestPostParameters().isEmpty()) {
+      postContent = queryMapToString(httpRequestCapabilities.getRequestPostParameters());
+    } else if (!Strings.isNullOrEmpty(httpRequestCapabilities.getRequestPostStringContent())) {
+      postContent = httpRequestCapabilities.getRequestPostStringContent();
+    } else {
+      throw new IllegalArgumentException("Empty post content.");
+    }
+    DataOutputStream wr = null;
+    HttpURLConnection conn = null;
+    URL url;
+    try {
+      // Create connection
+      url = new URL(urlDecode(httpRequestCapabilities.getUrl()));
+      conn = (HttpURLConnection) url.openConnection();
+      conn.setInstanceFollowRedirects(httpRequestCapabilities.getFollowRedirects());
+      conn.setRequestMethod("POST");
+      if (httpRequestCapabilities.getRequestProperties() == null ||
+          httpRequestCapabilities.getRequestProperties().isEmpty()) {
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        conn.setRequestProperty("Content-Length", "" +
+            Integer.toString(postContent.getBytes().length));
+        conn.setRequestProperty("Content-Language", "en-US");
+      } else {
+        conn.setRequestProperty("Content-Length", Integer.toString(postContent.getBytes().length));
+        for (Entry<String, String> entry : httpRequestCapabilities.getRequestProperties().entrySet()) {
+          conn.setRequestProperty(entry.getKey(), entry.getValue());
+        }
+      }
+      conn.setUseCaches(false);
+      conn.setDoInput(true);
+      conn.setDoOutput(true);
+      // Send request
+      wr = new DataOutputStream(conn.getOutputStream());
+      wr.writeBytes(postContent);
+      wr.flush();
+      wr.close();
+      handleRequestResult(conn, httpRequestCapabilities);
+      //      return httpRequestCapabilities.getResponseContent();
     } catch (IOException e) {
       throw e;
     } finally {
@@ -103,62 +212,33 @@ public class HttpUtils {
   }
 
   public static final String postMethod(String targetURL, Map<String, String> parameters) throws IOException {
-    ArrayList<String> postData = new ArrayList<String>();
-    Iterator<Entry<String, String>> iterator = parameters.entrySet().iterator();
-    Entry<String, String> entry;
-    String LsA;
-    while (iterator.hasNext()) {
-      entry = iterator.next();
-      LsA = entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), tools.office.StringUtils.getUTF8String());
-      postData.add(LsA);
-    }
-    URL url;
-    String urlParameters = "";
-    if (postData.size() == 0) {
-      throw new NotFoundException("postData size = 0");
-    }
-    for (int i = 0; i < postData.size(); i++) {
-      if (i == 0)
-        urlParameters += postData.get(i);
-      else
-        urlParameters += "&" + postData.get(i);
-    }
-    DataOutputStream wr = null;
-    HttpURLConnection conn = null;
-    try {
-      // Create connection
-      url = new URL(urlDecode(targetURL));
-      conn = (HttpURLConnection) url.openConnection();
-      conn.setRequestMethod("POST");
-      conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-      conn.setRequestProperty("Content-Length", "" +
-          Integer.toString(urlParameters.getBytes().length));
-      conn.setRequestProperty("Content-Language", "en-US");
-      conn.setUseCaches(false);
-      conn.setDoInput(true);
-      conn.setDoOutput(true);
-      // Send request
-      wr = new DataOutputStream(conn.getOutputStream());
-      wr.writeBytes(urlParameters);
-      wr.flush();
-      wr.close();
-      return handleRequestResult(conn);
-    } catch (IOException e) {
-      throw e;
-    } finally {
-      if (conn != null)
-        conn.disconnect();
-    }
+    HttpRequestCapabilities httpRequestCapabilities = new HttpRequestCapabilities(targetURL, parameters);
+    postMethod(httpRequestCapabilities);
+    return handleRequestResultInString(httpRequestCapabilities);
   }
 
-  private static final String handleRequestResult(HttpURLConnection conn) throws IOException {
-    String returnStr = readInputStream(conn.getInputStream());
-    if (!returnStr.isEmpty()) {
-      return returnStr;
-    } else if (conn.getResponseCode() == 301 || conn.getResponseCode() == 302) {
-      return conn.getHeaderFields().toString() + conn.getResponseMessage();
+  private static final void handleRequestResult(HttpURLConnection conn, HttpRequestCapabilities httpRequestCapabilities) throws IOException {
+    InputStream is;
+    if (conn.getResponseCode() >= 400) {
+      is = conn.getErrorStream();
     } else {
-      return String.valueOf(conn.getResponseCode());
+      is = conn.getInputStream();
+    }
+    String returnStr = readInputStream(is);
+    httpRequestCapabilities.setResponseContent(returnStr);
+    httpRequestCapabilities.setResponseCode(conn.getResponseCode());
+    httpRequestCapabilities.setResponseHeaderMap(conn.getHeaderFields());
+    httpRequestCapabilities.setResponseMessage(conn.getResponseMessage());
+    httpRequestCapabilities.setContentObject(conn.getContent());
+  }
+
+  private static final String handleRequestResultInString(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
+    if (!httpRequestCapabilities.getResponseContent().isEmpty()) {
+      return httpRequestCapabilities.getResponseContent();
+    } else if (httpRequestCapabilities.getResponseCode() == 301 || httpRequestCapabilities.getResponseCode() == 302) {
+      return httpRequestCapabilities.getResponseHeaderMap().toString() + httpRequestCapabilities.getResponseMessage();
+    } else {
+      return String.valueOf(httpRequestCapabilities.getResponseCode());
     }
   }
 
@@ -180,13 +260,21 @@ public class HttpUtils {
   }
 
   public static final String postStringTo(String URL, String content) throws ClientProtocolException, IOException {
-    CloseableHttpClient httpClient = HttpClients.createDefault();
-    HttpPost request = new HttpPost(URL);
-    StringEntity params = new StringEntity(content);
-    request.addHeader("content-type", "application/x-www-form-urlencoded");
-    request.setEntity(params);
-    return handlePostResult(httpClient.execute(request));
+    HttpRequestCapabilities httpRequestCapabilities = new HttpRequestCapabilities(URL, content);
+    httpRequestCapabilities.setRequestProperties(ImmutableMap.of("Content-Type", "application/x-www-form-urlencoded"));
+    postMethod(httpRequestCapabilities);
+    return handleRequestResultInString(httpRequestCapabilities);
   }
+
+  //
+  //  public static final String postStringTo(String URL, String content) throws ClientProtocolException, IOException {
+  //    CloseableHttpClient httpClient = HttpClients.createDefault();
+  //    HttpPost request = new HttpPost(URL);
+  //    StringEntity params = new StringEntity(content);
+  //    request.addHeader();
+  //    request.setEntity(params);
+  //    return handlePostResult(httpClient.execute(request));
+  //  }
 
   public static final String postUploadFile(String url, File file) throws IOException {
     CloseableHttpClient httpClient = HttpClients.createDefault();
