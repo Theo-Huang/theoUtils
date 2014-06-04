@@ -14,6 +14,7 @@ import java.net.Socket;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.net.UnknownServiceException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -229,7 +230,11 @@ public class HttpUtils {
     httpRequestCapabilities.setResponseCode(conn.getResponseCode());
     httpRequestCapabilities.setResponseHeaderMap(conn.getHeaderFields());
     httpRequestCapabilities.setResponseMessage(conn.getResponseMessage());
-    httpRequestCapabilities.setContentObject(conn.getContent());
+    try {
+      httpRequestCapabilities.setContentObject(conn.getContent());
+    } catch (UnknownServiceException e) {
+      //this may null
+    }
   }
 
   private static final String handleRequestResultInString(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
