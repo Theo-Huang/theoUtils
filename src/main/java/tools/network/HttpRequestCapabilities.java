@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.google.common.collect.Maps;
+
 public class HttpRequestCapabilities {
 
   private final String url;
@@ -14,7 +16,7 @@ public class HttpRequestCapabilities {
   private Map<String, String> requestPostParameters;
   private Map<String, String> requestProperties;
   private String requestPostStringContent;
-  private int responseCode;
+  private int responseCode = -1;
   private Object contentObject;
   private boolean followRedirects = false;
 
@@ -100,6 +102,13 @@ public class HttpRequestCapabilities {
 
   public void setRequestProperties(Map<String, String> requestProperties) {
     this.requestProperties = requestProperties;
+  }
+
+  public void addRequestProperties(String key, String value) {
+    if (getRequestProperties() == null) {
+      setRequestProperties(Maps.<String, String> newLinkedHashMap());
+    }
+    getRequestProperties().put(key, value);
   }
 
   public int getResponseCode() {
