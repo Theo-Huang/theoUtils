@@ -5,7 +5,7 @@ import java.util.HashMap;
 public class Base64 {
 
   private static final String default_code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  private static final char default_pad = '$';
+  private static final char default_pad = '=';
 
   private String encode = null;
   private char pad;
