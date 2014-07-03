@@ -77,6 +77,9 @@ public class SystemUtils {
         for (String str : executeCMD("sudo ps aux").split("[\n\r\n]")) {
           strArrays = str.split("\\s+");
           str = str.substring(str.indexOf(strArrays[startIndex]), str.length());
+          if (str.contains("-")) {// filter out the command parameters
+            str = str.substring(0, str.indexOf("-"));
+          }
           if (str.contains(processName)) {
             pid = strArrays[1].trim();
             if (pid.matches(pidPattern)) {

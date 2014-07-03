@@ -161,7 +161,7 @@ public class FileUtils {
   private static final void writeFile(File file, boolean append, List<String> content) throws IOException {
     Writer out = null;
     try {
-      if (!file.getParentFile().exists()) {
+      if (!file.getAbsoluteFile().getParentFile().exists()) {
         file.getParentFile().mkdirs();
         file.createNewFile();
       }
