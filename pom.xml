@@ -19,6 +19,7 @@
 			<version>3.8.1</version>
 			<scope>test</scope>
 		</dependency>
+		
 		<dependency>
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
@@ -151,9 +152,9 @@
 
 	<distributionManagement>
 		<snapshotRepository>
-			<id>mydlinkQA</id>
-			<name>mydlinkQA snapshot</name>
-			<url>http://10.32.5.5/nexus/content/repositories/snapshots</url>
+			<id>maven-nexus</id>
+			<name>snapshots</name>
+			<url>http://10.201.242.135/nexus/content/repositories/snapshots</url>
 		</snapshotRepository>
 	</distributionManagement>
 
