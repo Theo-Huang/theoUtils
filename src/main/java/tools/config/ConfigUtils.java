@@ -96,7 +96,7 @@ public class ConfigUtils extends Properties {
     for (String str : getConfigContent()) {
       index = str.indexOf("=");
       if (index > 0 && !isComment(str)) {
-        map.put(str.substring(0, index), str.substring(index + 1));
+        map.put(str.substring(0, index).trim(), str.substring(index + 1));
       }
 
     }
