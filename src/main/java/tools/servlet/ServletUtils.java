@@ -4,6 +4,8 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -54,6 +56,38 @@ public class ServletUtils {
       }
     }
     return file;
+  }
+
+  public static final void buildSendFileResponse(HttpServletResponse response, InputStream inputStream, String fileName) throws Exception {
+    ServletOutputStream stream = null;
+    BufferedInputStream buf = null;
+    try {
+      stream = response.getOutputStream();
+      // set response headers
+      response.addHeader("Content-Disposition", "attachment; filename=" + fileName);
+
+      buf = new BufferedInputStream(inputStream);
+      int readBytes = 0;
+      ArrayList<Integer> readBytesArray = new ArrayList<Integer>();
+      // count byte;
+      int index = 0;
+      while ((readBytes = buf.read()) != -1) {
+        readBytesArray.add(index++, readBytes);
+      }
+      response.setContentLength(index);
+      for (int i : readBytesArray) {
+        stream.write(i);
+      }
+
+    } catch (IOException ioe) {
+      response.sendError(500, ioe.getMessage());
+      return;
+    } finally {
+      if (stream != null)
+        stream.close();
+      if (buf != null)
+        buf.close();
+    }
   }
 
   public static final void buildSendFileResponse(HttpServletResponse response, File sendFile) throws Exception {
