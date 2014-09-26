@@ -126,10 +126,6 @@ public class FileUtils {
     return returnStrList;
   }
 
-  public static final File getSystemTempFile() {
-    return new File(System.getProperty("java.io.tmpdir"));
-  }
-
   public static final void setFileCharset(String charset) {
     fileCharset = Charset.forName(charset).toString();
   }
