@@ -1,5 +1,7 @@
 package tools.office;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
@@ -85,5 +87,18 @@ public class StringUtils {
       return firstStr.replaceFirst(UTF8_BOM, "");
     }
     return firstStr;
+  }
+
+  public static InputStream stringToInputStream(String string) {
+    try {
+      return stringToInputStream(string, tools.office.StringUtils.getUTF8String());
+    } catch (UnsupportedEncodingException e) {
+      //should not happen
+    }
+    return null;
+  }
+
+  public static InputStream stringToInputStream(String string, String charSet) throws UnsupportedEncodingException {
+    return new ByteArrayInputStream(string.getBytes(charSet));
   }
 }
