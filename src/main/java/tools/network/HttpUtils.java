@@ -32,11 +32,19 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.AuthenticationException;
+import org.apache.http.auth.Credentials;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 
@@ -280,6 +288,25 @@ public class HttpUtils {
   //    request.setEntity(params);
   //    return handlePostResult(httpClient.execute(request));
   //  }
+
+  public static final String postUploadFile(String url, File file, String userName, String password) throws IOException, AuthenticationException {
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+
+    Credentials credentials =
+        new UsernamePasswordCredentials(userName, password);
+    CredentialsProvider credsProvider = new BasicCredentialsProvider();
+    credsProvider.setCredentials(AuthScope.ANY, credentials);
+    HttpClientContext context = HttpClientContext.create();
+    context.setCredentialsProvider(credsProvider);
+
+    HttpPost post = new HttpPost(url);
+    post.addHeader(new BasicScheme().authenticate(credentials, post, context));
+    MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+    builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+    builder.addPart("file", new FileBody(file));
+    post.setEntity(builder.build());
+    return handlePostResult(httpClient.execute(post, context));
+  }
 
   public static final String postUploadFile(String url, File file) throws IOException {
     CloseableHttpClient httpClient = HttpClients.createDefault();
