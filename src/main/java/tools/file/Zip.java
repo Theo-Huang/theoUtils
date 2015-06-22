@@ -87,6 +87,7 @@ public class Zip {
                 }
               } finally {
                 zout.closeEntry();
+                zout.close();
               }
             }
           }
@@ -94,6 +95,9 @@ public class Zip {
       } finally {
         res.close();
         TVFS.umount(target);
+        if (out != null) {
+          out.close();
+        }
       }
     } catch (Exception ee) {
       throw new IOException(ee);
@@ -105,55 +109,56 @@ public class Zip {
         Charset.forName(tools.office.StringUtils.getBIG5String()) :
         Charset.forName("CP437");
   }
-  //  public void zip() {
-  //    generateFileList(this.source);
-  //    if (!target.getName().toLowerCase().endsWith(".zip")) {
-  //      throw new exception.UtilityException("Final zip file name path must end with '.zip'");
-  //    }
-  //    if (!target.getParentFile().exists()) {
-  //      target.getParentFile().mkdirs();
-  //    }
-  //    zipIt(this.target);
-  //  }
+  // public void zip() {
+  // generateFileList(this.source);
+  // if (!target.getName().toLowerCase().endsWith(".zip")) {
+  // throw new exception.UtilityException("Final zip file name path must end with '.zip'");
+  // }
+  // if (!target.getParentFile().exists()) {
+  // target.getParentFile().mkdirs();
+  // }
+  // zipIt(this.target);
+  // }
   //
-  //  private void zipIt(File zipFile) {
-  //    byte[] buffer = new byte[1024];
-  //    try {
-  //      FileOutputStream fos = new FileOutputStream(zipFile);
-  //      ZipOutputStream zos = new ZipOutputStream(fos);
-  //      for (String file : this.fileList) {
-  //        ZipEntry ze = new ZipEntry(file);
-  //        zos.putNextEntry(ze);
-  //        FileInputStream in = new FileInputStream(source + tools.FileUtils.File_SEP + file);
-  //        int len;
-  //        while ((len = in.read(buffer)) > 0) {
-  //          zos.write(buffer, 0, len);
-  //        }
-  //        in.close();
-  //      }
-  //      zos.closeEntry();
-  //      zos.close();
-  //    } catch (IOException ex) {
-  //      ex.printStackTrace();
-  //    }
-  //  }
+  // private void zipIt(File zipFile) {
+  // byte[] buffer = new byte[1024];
+  // try {
+  // FileOutputStream fos = new FileOutputStream(zipFile);
+  // ZipOutputStream zos = new ZipOutputStream(fos);
+  // for (String file : this.fileList) {
+  // ZipEntry ze = new ZipEntry(file);
+  // zos.putNextEntry(ze);
+  // FileInputStream in = new FileInputStream(source + tools.FileUtils.File_SEP + file);
+  // int len;
+  // while ((len = in.read(buffer)) > 0) {
+  // zos.write(buffer, 0, len);
+  // }
+  // in.close();
+  // }
+  // zos.closeEntry();
+  // zos.close();
+  // } catch (IOException ex) {
+  // ex.printStackTrace();
+  // }
+  // }
   //
-  //  private void generateFileList(File node) {
-  //    if (node.isFile()) {
-  //      fileList.add(generateZipEntry(node.getAbsoluteFile().toString()));
-  //    }
-  //    if (node.isDirectory()) {
-  //      String[] subNote = node.list();
-  //      for (String filename : subNote) {
-  //        generateFileList(new File(node, filename));
-  //      }
-  //    }
-  //  }
+  // private void generateFileList(File node) {
+  // if (node.isFile()) {
+  // fileList.add(generateZipEntry(node.getAbsoluteFile().toString()));
+  // }
+  // if (node.isDirectory()) {
+  // String[] subNote = node.list();
+  // for (String filename : subNote) {
+  // generateFileList(new File(node, filename));
+  // }
+  // }
+  // }
   //
-  //  private String generateZipEntry(String file) {
-  //    return file.substring(this.source.getAbsolutePath().length() + 1, file.length());
-  //  }
+  // private String generateZipEntry(String file) {
+  // return file.substring(this.source.getAbsolutePath().length() + 1, file.length());
+  // }
 }
+
 
 class newZipDriver extends ZipDriver {
   protected newZipDriver() {

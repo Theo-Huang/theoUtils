@@ -17,8 +17,8 @@ public class MD5 {
     try {
       return MessageDigest.getInstance("MD5");
     } catch (NoSuchAlgorithmException e) {
-      //      e.printStackTrace();
-      //  should not happen
+      // e.printStackTrace();
+      // should not happen
     }
     return null;
   }
@@ -28,20 +28,34 @@ public class MD5 {
   }
 
   public static final String getMD5(File file) throws Exception {
-    String digest = getDigest(new FileInputStream(file));
-    return digest;
+    FileInputStream fi = null;
+    try {
+      fi = new FileInputStream(file);;
+      String digest = getDigest(fi);
+      return digest;
+    } finally {
+      if (fi != null) {
+        fi.close();
+      }
+    }
   }
 
   public synchronized static final String getDigest(InputStream is) throws Exception {
-    md.reset();
-    byte[] bytes = new byte[byteArraySize];
-    int numBytes;
-    while ((numBytes = is.read(bytes)) != -1) {
-      md.update(bytes, 0, numBytes);
+    try {
+      md.reset();
+      byte[] bytes = new byte[byteArraySize];
+      int numBytes;
+      while ((numBytes = is.read(bytes)) != -1) {
+        md.update(bytes, 0, numBytes);
+      }
+      byte[] digest = md.digest();
+      String result = new String(Hex.encodeHex(digest));
+      return result;
+    } finally {
+      if (is != null) {
+        is.close();
+      }
     }
-    byte[] digest = md.digest();
-    String result = new String(Hex.encodeHex(digest));
-    return result;
   }
 
   public synchronized static final String getMD5(String str) {

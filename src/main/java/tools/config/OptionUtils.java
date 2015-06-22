@@ -1,7 +1,7 @@
 package tools.config;
 
 public class OptionUtils {
-  public static final Boolean getBooleanArrayOption(Boolean[] array, Boolean defaultBoolean) {
+  public static final boolean getBooleanArrayOption(Boolean[] array, Boolean defaultBoolean) {
     return new ArrayParaTeller<Boolean>(defaultBoolean).tell(array);
   }
 

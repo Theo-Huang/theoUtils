@@ -25,7 +25,12 @@ public class OfficeUtils {
 
   public static final synchronized Workbook getExcelWorkbook(File excel) throws InvalidFormatException, FileNotFoundException, IOException {
     synchronized (syncObj) {
-      return WorkbookFactory.create(new FileInputStream(excel));
+      FileInputStream fi = new FileInputStream(excel);
+      try {
+        return WorkbookFactory.create(fi);
+      } finally {
+        fi.close();
+      }
     }
   }
 }

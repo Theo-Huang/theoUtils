@@ -40,10 +40,9 @@ public class SSHUtils {
   }
 
   public String executeCommand(String... command) throws IOException, InterruptedException {
-    return executeCommand(Lists.<String> newArrayList(command));
+    return executeCommand(Lists.<String>newArrayList(command));
   }
 
-  @SuppressWarnings({ "resource" })
   public String executeCommand(List<String> commands) throws IOException, InterruptedException {
     InputStream stdout;
     InputStream stderr;
@@ -99,6 +98,8 @@ public class SSHUtils {
         }
       }
     };
+    stdoutReader.close();
+    stderrReader.close();
     readThread.start();
     readErrThread.start();
     readThread.join();

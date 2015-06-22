@@ -14,7 +14,6 @@ import java.net.Socket;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.net.UnknownServiceException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -104,6 +103,10 @@ public class HttpUtils {
     try {
       url = new URL(urlDecode(httpRequestCapabilities.getUrl()));
       conn = (HttpURLConnection) url.openConnection();
+      if (!httpRequestCapabilities.isKeepAlive()) {
+        conn.setRequestProperty("connection", "close");
+        conn.setRequestProperty("Connection", "close");
+      }
       conn.setInstanceFollowRedirects(httpRequestCapabilities.getFollowRedirects());
       conn.setRequestMethod("GET");
       if (httpRequestCapabilities.getRequestProperties() == null ||
@@ -114,12 +117,13 @@ public class HttpUtils {
           conn.setRequestProperty(entry.getKey(), entry.getValue());
         }
       }
-      handleRequestResult(conn, httpRequestCapabilities);
     } catch (IOException e) {
       throw e;
     } finally {
-      if (conn != null)
+      handleRequestResult(conn, httpRequestCapabilities);
+      if (conn != null) {
         conn.disconnect();
+      }
     }
   }
 
@@ -135,11 +139,16 @@ public class HttpUtils {
     try {
       for (String pair : pairs) {
         int equalIndex = pair.indexOf("=");
-        queryPairs.put(
-            URLDecoder.decode(pair.substring(0, equalIndex),
-                tools.office.StringUtils.getUTF8String()),
-            URLDecoder.decode(pair.substring(equalIndex + 1),
-                tools.office.StringUtils.getUTF8String()));
+        if (pair.contains("%") && !pair.contains(" ") && pair.matches(".*[%][0-9]+.*")) {
+          queryPairs.put(
+              URLDecoder.decode(pair.substring(0, equalIndex),
+                  tools.office.StringUtils.getUTF8String()),
+              URLDecoder.decode(pair.substring(equalIndex + 1),
+                  tools.office.StringUtils.getUTF8String()));
+        } else {
+          queryPairs.put(pair.substring(0, equalIndex), pair.substring(equalIndex + 1));
+        }
+
       }
     } catch (Exception e) {
       throw new IllegalArgumentException("Parsing error:" + e.getMessage());
@@ -188,6 +197,10 @@ public class HttpUtils {
       // Create connection
       url = new URL(urlDecode(httpRequestCapabilities.getUrl()));
       conn = (HttpURLConnection) url.openConnection();
+      if (!httpRequestCapabilities.isKeepAlive()) {
+        conn.setRequestProperty("connection", "close");
+        conn.setRequestProperty("Connection", "close");
+      }
       conn.setInstanceFollowRedirects(httpRequestCapabilities.getFollowRedirects());
       conn.setRequestMethod("POST");
       if (httpRequestCapabilities.getRequestProperties() == null ||
@@ -209,14 +222,19 @@ public class HttpUtils {
       wr = new DataOutputStream(conn.getOutputStream());
       wr.writeBytes(postContent);
       wr.flush();
-      wr.close();
-      handleRequestResult(conn, httpRequestCapabilities);
-      //      return httpRequestCapabilities.getResponseContent();
     } catch (IOException e) {
       throw e;
     } finally {
-      if (conn != null)
+      handleRequestResult(conn, httpRequestCapabilities);
+      if (wr != null) {
+        try {
+          wr.close();
+        } catch (IOException ioe) {
+        }
+      }
+      if (conn != null) {
         conn.disconnect();
+      }
     }
   }
 
@@ -233,15 +251,24 @@ public class HttpUtils {
     } else {
       is = conn.getInputStream();
     }
-    String returnStr = readInputStream(is);
-    httpRequestCapabilities.setResponseContent(returnStr);
-    httpRequestCapabilities.setResponseCode(conn.getResponseCode());
-    httpRequestCapabilities.setResponseHeaderMap(conn.getHeaderFields());
-    httpRequestCapabilities.setResponseMessage(conn.getResponseMessage());
     try {
-      httpRequestCapabilities.setContentObject(conn.getContent());
-    } catch (UnknownServiceException e) {
-      //this may null
+      String returnStr = readInputStream(is);
+      httpRequestCapabilities.setResponseContent(returnStr);
+      httpRequestCapabilities.setResponseCode(conn.getResponseCode());
+      httpRequestCapabilities.setResponseHeaderMap(conn.getHeaderFields());
+      httpRequestCapabilities.setResponseMessage(conn.getResponseMessage());
+      try {
+        httpRequestCapabilities.setContentObject(conn.getContent());
+      } catch (Exception e) {
+        // this may null
+      }
+    } finally {
+      if (is != null) {
+        is.close();
+      }
+      if (conn != null) {
+        conn.disconnect();
+      }
     }
   }
 
@@ -261,6 +288,8 @@ public class HttpUtils {
       URL url;
       url = new URL(urlDecode(targetURL));
       conn = (HttpURLConnection) url.openConnection();
+      conn.setRequestProperty("connection", "close");
+      conn.setRequestProperty("Connection", "close");
       conn.setRequestMethod("GET");
       conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
       return true;
@@ -280,14 +309,14 @@ public class HttpUtils {
   }
 
   //
-  //  public static final String postStringTo(String URL, String content) throws ClientProtocolException, IOException {
-  //    CloseableHttpClient httpClient = HttpClients.createDefault();
-  //    HttpPost request = new HttpPost(URL);
-  //    StringEntity params = new StringEntity(content);
-  //    request.addHeader();
-  //    request.setEntity(params);
-  //    return handlePostResult(httpClient.execute(request));
-  //  }
+  // public static final String postStringTo(String URL, String content) throws ClientProtocolException, IOException {
+  // CloseableHttpClient httpClient = HttpClients.createDefault();
+  // HttpPost request = new HttpPost(URL);
+  // StringEntity params = new StringEntity(content);
+  // request.addHeader();
+  // request.setEntity(params);
+  // return handlePostResult(httpClient.execute(request));
+  // }
 
   public static final String postUploadFile(String url, File file, String userName, String password) throws IOException, AuthenticationException {
     CloseableHttpClient httpClient = HttpClients.createDefault();
@@ -350,10 +379,17 @@ public class HttpUtils {
       }
     } finally {
       if (rd != null) {
-        rd.close();
+        try {
+          rd.close();
+        } catch (IOException ioe) {
+
+        }
       }
       if (ins != null) {
-        ins.close();
+        try {
+          ins.close();
+        } catch (IOException ioe) {
+        }
       }
     }
   }
@@ -381,11 +417,13 @@ public class HttpUtils {
     try {
       socket = new Socket(url.getHost(), url.getPort());
       reachable = true;
-    } catch (Exception e) {} finally {
+    } catch (Exception e) {
+    } finally {
       if (socket != null)
         try {
           socket.close();
-        } catch (IOException e) {}
+        } catch (IOException e) {
+        }
     }
     return reachable;
   }
@@ -399,7 +437,8 @@ public class HttpUtils {
       ds = new DatagramSocket(port);
       ds.setReuseAddress(true);
       return true;
-    } catch (IOException e) {} finally {
+    } catch (IOException e) {
+    } finally {
       if (ds != null) {
         ds.close();
       }
@@ -407,7 +446,8 @@ public class HttpUtils {
       if (ss != null) {
         try {
           ss.close();
-        } catch (IOException e) {}
+        } catch (IOException e) {
+        }
       }
     }
     return false;

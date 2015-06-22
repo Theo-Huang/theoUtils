@@ -64,15 +64,25 @@ public class ConfigUtils extends Properties {
     String str;
     if (isComment(target)) {
       throw new exception.UtilityException("'//' or '#' prefix is comment.");
-    }
+    };
+    boolean added = false;
     for (int i = 0, n = configContent.size(); i < n; i++) {
       str = configContent.get(i);
       if (str.matches(target.toString() + configPattern)) {
         str = target + "=" + value;
         configContent.remove(i);
         configContent.add(i, str);
+        added = true;
         break;
       }
+    }
+    if (!added) {
+      configContent.add(target + "=" + value);
+    }
+    try {
+      loadToProperty();
+    } catch (IOException e) {
+      new exception.UtilityException(e);
     }
   }
 

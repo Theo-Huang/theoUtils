@@ -19,7 +19,7 @@ import org.apache.commons.fileupload.servlet.ServletFileUpload;
 
 public class ServletUtils {
 
-  private static final int maxFileSize = 500 * 1024 * 1024;//500mb
+  private static final int maxFileSize = 500 * 1024 * 1024;// 500mb
   private static final int maxMemSize = 1024 * 1024;
 
   public static final File receiveFile(HttpServletRequest req, File tempRepo) throws Exception {
@@ -83,10 +83,15 @@ public class ServletUtils {
       response.sendError(500, ioe.getMessage());
       return;
     } finally {
-      if (stream != null)
+      if (stream != null) {
         stream.close();
-      if (buf != null)
+      }
+      if (buf != null) {
         buf.close();
+      }
+      if (inputStream != null) {
+        inputStream.close();
+      }
     }
   }
 

@@ -37,7 +37,7 @@ public class FileUtils {
   private static String fileCharset = Charset.forName("UTF-8").toString();
 
   public static final void fileDelete(File file, String containToDelete) {
-    FileDeleter fd = new FileDeleter(file, containToDelete);
+    FileDeleter fd = new FileDeleter(file.getAbsoluteFile(), containToDelete);
     fd.delete();
   }
 
@@ -50,7 +50,7 @@ public class FileUtils {
     final int type = 3;
     int tempOwner = owner;
     int tempType = type;
-    Boolean permissions[][] = new Boolean[owner][type];
+    boolean permissions[][] = new boolean[owner][type];
     if (permission > 777) {
       throw new IOException("Invalid permission.");
     }
@@ -73,21 +73,21 @@ public class FileUtils {
     }
     tempOwner = owner;
     Set<PosixFilePermission> perms = new HashSet<PosixFilePermission>();
-    //add owner permissions
+    // add owner permissions
     if (permissions[2][2])
       perms.add(PosixFilePermission.OWNER_READ);
     if (permissions[2][1])
       perms.add(PosixFilePermission.OWNER_WRITE);
     if (permissions[2][0])
       perms.add(PosixFilePermission.OWNER_EXECUTE);
-    //add group permissions
+    // add group permissions
     if (permissions[1][2])
       perms.add(PosixFilePermission.GROUP_READ);
     if (permissions[1][1])
       perms.add(PosixFilePermission.GROUP_WRITE);
     if (permissions[1][0])
       perms.add(PosixFilePermission.GROUP_EXECUTE);
-    //add others permissions
+    // add others permissions
     if (permissions[0][2])
       perms.add(PosixFilePermission.OTHERS_READ);
     if (permissions[0][1])
@@ -121,7 +121,15 @@ public class FileUtils {
         }
       }
     } finally {
-      in.close();
+
+      if (br != null) {
+        br.close();
+      }
+
+      if (in != null) {
+        in.close();
+      }
+
     }
     return returnStrList;
   }
@@ -161,14 +169,13 @@ public class FileUtils {
         file.getParentFile().mkdirs();
         file.createNewFile();
       }
-      out = new BufferedWriter(new OutputStreamWriter(
-          new FileOutputStream(file), fileCharset));
+      out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file, append), fileCharset));
       for (String str : content) {
         out.append(str + Line_SEP);
       }
+      out.flush();
     } finally {
       if (out != null) {
-        out.flush();
         out.close();
       }
     }
@@ -177,18 +184,40 @@ public class FileUtils {
   public static final void writeFileData(File file, boolean append, List<String> content, Boolean... sync) throws IOException {
     if (OptionUtils.getBooleanArrayOption(sync, false)) {
       syncWriteFile(file, append, content);
-    } else
+    } else {
       writeFile(file, append, content);
+    }
   }
+
+  public static final List<File> depthFindFiles(File defaultFile, final String filePattern) {
+    return depthFindFiles(defaultFile, filePattern, new ArrayList<File>());
+  }
+
+  public static final List<File> depthFindFiles(File defaultFile, final String filePattern, List<File> fileContainer) {
+    String[] files = defaultFile.list();
+    if (files == null || files.length == 0) {
+      return fileContainer;
+    }
+    List<File> fList = getFileInFolder(defaultFile, filePattern, true);
+    if (fList != null && !fList.isEmpty()) {
+      fileContainer.addAll(fList);
+    }
+    for (File file : defaultFile.listFiles()) {
+      depthFindFiles(file, filePattern, fileContainer);
+    }
+    return fileContainer;
+  }
+
 
   public static final File depthFindFile(File defaultFile, final String filePattern) {
     File returnFile = null;
     String[] files = defaultFile.list();
-    if (files == null || files.length == 0)
+    if (files == null || files.length == 0) {
       return null;
-    File findFile = getFileInFolder(defaultFile, filePattern);
-    if (findFile != null) {
-      return findFile;
+    }
+    List<File> fList = getFileInFolder(defaultFile, filePattern, false);
+    if (fList != null && !fList.isEmpty()) {
+      return fList.get(0);
     }
     for (File file : defaultFile.listFiles()) {
       returnFile = depthFindFile(file, filePattern);
@@ -199,14 +228,18 @@ public class FileUtils {
     return null;
   }
 
-  public static final File getFileInFolder(File defaultFolder, String pattern) {
+  public static final List<File> getFileInFolder(File defaultFolder, String pattern, boolean multiple) {
     File[] files = defaultFolder.isDirectory() ? defaultFolder.listFiles() : defaultFolder.getParentFile().listFiles();
+    List<File> returnList = new ArrayList<File>();
     for (File f : files) {
       if (f.getName().matches(pattern)) {
-        return f;
+        returnList.add(f);
+        if (!multiple) {
+          break;
+        }
       }
     }
-    return null;
+    return returnList;
   }
 
   public static final boolean copyFile(String srcFilepath, String dstFilepath, boolean overWrite) {
@@ -233,9 +266,12 @@ public class FileUtils {
     } catch (IOException e) {
       throw e;
     } finally {
-      in.close();
-      out.flush();
-      out.close();
+      if (in != null) {
+        in.close();
+      }
+      if (out != null) {
+        out.close();
+      }
     }
   }
 
@@ -298,6 +334,7 @@ public class FileUtils {
 
 }
 
+
 class copyFileHandler extends Thread {
   private InputStream in;
   private OutputStream out;
@@ -353,6 +390,7 @@ class copyFileHandler extends Thread {
 
 }
 
+
 class FileDeleter {
   /**
    * before edit this class please make sure your brain is clear....
@@ -390,28 +428,35 @@ class FileDeleter {
           tools.system.SystemUtils.executeCMD("del /f " + deleteFile.getAbsoluteFile(), false);
         }
       } catch (Exception e1) {
-        //          e1.printStackTrace();
-        //          ignore
+        // e1.printStackTrace();
+        // ignore
       }
-      //e.printStackTrace();
-      //ignore
+      // e.printStackTrace();
+      // ignore
     }
   }
 
   private void fileDelete(File folder, String containToDelete) {
     try {
-      for (final File fileEntry : folder.listFiles()) {
-        if (fileEntry.isDirectory()) {
-          fileDelete(fileEntry, containToDelete);
-        } else if (isContainToDeleteEmpty || fileEntry.getName().contains(containToDelete)) {
-          forceDelete(fileEntry);
+      if (folder.isDirectory()) {
+        for (final File fileEntry : folder.listFiles()) {
+          if (fileEntry.isDirectory()) {
+            fileDelete(fileEntry, containToDelete);
+          } else if (isContainToDeleteEmpty || fileEntry.getName().contains(containToDelete)) {
+            forceDelete(fileEntry);
+          }
+        }
+        if (folder.listFiles().length == 0 && isContainToDeleteEmpty) {
+          forceDelete(folder);
+        }
+      } else if (folder.isFile()) {
+        if (isContainToDeleteEmpty || folder.getName().contains(containToDelete)) {
+          forceDelete(folder);
         }
       }
-      if (folder.listFiles().length == 0 && isContainToDeleteEmpty) {
-        forceDelete(folder);
-      }
+
     } catch (Exception e) {
-      if (containToDelete == null || containToDelete.isEmpty()) {
+      if (isContainToDeleteEmpty) {
         forceDelete(folder);
       }
     }

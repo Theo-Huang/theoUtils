@@ -145,6 +145,7 @@ public class SystemUtils {
   }
 
   public static final String readProcessInputStream(Process ps, Boolean... print) throws IOException, InterruptedException {
+
     InputStream is = ps.getInputStream();
     InputStream isErr = ps.getErrorStream();
     boolean isPrint = tools.config.OptionUtils.getBooleanArrayOption(print, false);
@@ -152,24 +153,40 @@ public class SystemUtils {
     String decode = isWindows() ? "ms950" : "CP857";
     InputStreamReader isr = new InputStreamReader(is, decode);
     InputStreamReader isrErr = new InputStreamReader(isErr, decode);
-    BufferedReader br = new BufferedReader(isr);
-    BufferedReader brErr = new BufferedReader(isrErr);
-    String line;
-    String lineErr;
-    while ((line = br.readLine()) != null) {
-      returnStr += line + tools.file.FileUtils.Line_SEP;
-      if (isPrint) {
-        System.out.println(line);
+    try {
+      BufferedReader br = new BufferedReader(isr);
+      BufferedReader brErr = new BufferedReader(isrErr);
+      String line;
+      String lineErr;
+      while ((line = br.readLine()) != null) {
+        returnStr += line + tools.file.FileUtils.Line_SEP;
+        if (isPrint) {
+          System.out.println(line);
+        }
       }
-    }
 
-    while ((lineErr = brErr.readLine()) != null) {
-      returnStr += lineErr + tools.file.FileUtils.Line_SEP;
-      if (isPrint) {
-        System.err.println(lineErr);
+      while ((lineErr = brErr.readLine()) != null) {
+        returnStr += lineErr + tools.file.FileUtils.Line_SEP;
+        if (isPrint) {
+          System.err.println(lineErr);
+        }
       }
+      ps.waitFor();
+    } finally {
+      if (isr != null) {
+        isr.close();
+      }
+      if (isrErr != null) {
+        isrErr.close();
+      }
+      if (is != null) {
+        is.close();
+      }
+      if (isErr != null) {
+        isErr.close();
+      }
+
     }
-    ps.waitFor();
     return returnStr;
   }
 

@@ -1,5 +1,6 @@
 package tools.network;
 
+import java.io.Serializable;
 import java.net.URLDecoder;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -7,9 +8,11 @@ import java.util.Map;
 
 import com.google.common.collect.Maps;
 
-public class HttpRequestCapabilities {
+public class HttpRequestCapabilities implements Serializable {
 
-  private final String url;
+  private static final long serialVersionUID = 1L;
+
+  private String url;
   private String responseContent;
   private String responseMessage;
   private Map<String, List<String>> responseHeaderMap;
@@ -19,6 +22,10 @@ public class HttpRequestCapabilities {
   private int responseCode = -1;
   private Object contentObject;
   private boolean followRedirects = false;
+  private boolean keepAlive = true;
+
+
+  public HttpRequestCapabilities() {}
 
   public HttpRequestCapabilities(String url) {
     this.url = url;
@@ -106,7 +113,7 @@ public class HttpRequestCapabilities {
 
   public void addRequestProperties(String key, String value) {
     if (getRequestProperties() == null) {
-      setRequestProperties(Maps.<String, String> newLinkedHashMap());
+      setRequestProperties(Maps.<String, String>newLinkedHashMap());
     }
     getRequestProperties().put(key, value);
   }
@@ -127,11 +134,19 @@ public class HttpRequestCapabilities {
     return this.contentObject;
   }
 
-  public void setFollowRedirects(Boolean follow) {
+  public void setFollowRedirects(boolean follow) {
     this.followRedirects = follow;
   }
 
   public boolean getFollowRedirects() {
     return this.followRedirects;
+  }
+
+  public boolean isKeepAlive() {
+    return keepAlive;
+  }
+
+  public void setKeepAlive(boolean keepAlive) {
+    this.keepAlive = keepAlive;
   }
 }

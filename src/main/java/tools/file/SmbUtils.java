@@ -4,13 +4,19 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.io.FileExistsException;
 
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+
 import jcifs.UniAddress;
 import jcifs.smb.NtlmPasswordAuthentication;
+import jcifs.smb.SmbAuthException;
 import jcifs.smb.SmbException;
 import jcifs.smb.SmbFile;
 import jcifs.smb.SmbFileInputStream;
@@ -39,15 +45,15 @@ public class SmbUtils {
           toCreateFile.createNewFile();
         }
         downloadList.add(
-                new copyFileHandler(
-                    new SmbFileInputStream(file),
-                    new FileOutputStream(dtFile.getAbsolutePath() + File_SEP + fileName)));
+            new copyFileHandler(
+                new SmbFileInputStream(file),
+                new FileOutputStream(dtFile.getAbsolutePath() + File_SEP + fileName)));
       } else {
         if (!toCreateFile.exists()) {
           toCreateFile.mkdir();
         }
         depthCopyFromSmbFile(
-              file, toCreateFile, auth, downloadList, overWrite);
+            file, toCreateFile, auth, downloadList, overWrite);
       }
     }
     return downloadList;
@@ -71,44 +77,58 @@ public class SmbUtils {
           toCreateFile.createNewFile();
         }
         uploadList.add(
-                new copyFileHandler(
-                    new FileInputStream(file),
-                    new SmbFileOutputStream(toCreateFile)));
+            new copyFileHandler(
+                new FileInputStream(file),
+                new SmbFileOutputStream(toCreateFile)));
       } else {
         if (!toCreateFile.exists()) {
           toCreateFile.mkdir();
         }
         depthCopyToSmbFile(
-              file, toCreateFile, auth, uploadList, overWrite);
+            file, toCreateFile, auth, uploadList, overWrite);
       }
     }
     return uploadList;
   }
 
-  public static final SmbFile toValidSmbFile(final String str, NtlmPasswordAuthentication auth) throws IOException {
-    String returnStr = str;
-    returnStr = returnStr.replace("\\", "/");
-    returnStr = returnStr.replaceAll("^smb:", "");
-    returnStr = returnStr.replaceAll("^[/]*", "");
-    returnStr = "smb://" + returnStr;
+  public static final boolean testAuthToPath(final String ipOrDomain, final String path, NtlmPasswordAuthentication auth)
+      throws MalformedURLException, SmbException {
+    try {
+      String returnStr = resolvePath(ipOrDomain, path, true);
+      SmbFile smbFile = new SmbFile(returnStr, auth);
+      return smbFile.exists();
+    } catch (SmbAuthException e) {
+      return false;
+    }
+  }
+
+  public static final SmbFile toValidSmbFile(final String ipOrDomain, final String path, NtlmPasswordAuthentication auth) throws IOException {
+    // String returnStr = str;
+    // returnStr = returnStr.replace("\\", "/");
+    // returnStr = returnStr.replaceAll("^smb:", "");
+    // returnStr = returnStr.replaceAll("^[/]*", "");
+    String returnStr = resolvePath(ipOrDomain, path, true);
     SmbFile smbFile = new SmbFile(returnStr, auth);
     if (smbFile.exists()) {
       if (smbFile.isDirectory() && !returnStr.endsWith("/")) {
         smbFile = new SmbFile(returnStr + "/", auth);
+      } else if (smbFile.isFile() && returnStr.endsWith("/")) {
+        returnStr = returnStr.substring(0, returnStr.lastIndexOf("/"));
+        smbFile = new SmbFile(returnStr, auth);
       }
+
     }
     return smbFile;
   }
 
   public static final boolean copyFileToNetDrive(
-      final String account,
-      final String pwd,
+      final String ipOrDomain,
+      final NtlmPasswordAuthentication auth,
       final String srFile,
       final String dtFile,
       final boolean overWrite) throws IOException, InterruptedException {
-    final NtlmPasswordAuthentication auth = new NtlmPasswordAuthentication(null, account, pwd);
     final File srcFile = new File(srFile);
-    final SmbFile destFile = toValidSmbFile(dtFile, auth);
+    final SmbFile destFile = toValidSmbFile(ipOrDomain, dtFile, auth);
     CopyAction action = new CopyAction() {
 
       @Override
@@ -125,7 +145,7 @@ public class SmbUtils {
       public List<copyFileHandler> folderCopyThread() throws IOException {
         List<copyFileHandler> threadList = new ArrayList<copyFileHandler>();
         return depthCopyToSmbFile(
-              srcFile, destFile, auth, threadList, overWrite);
+            srcFile, destFile, auth, threadList, overWrite);
       }
 
       @Override
@@ -146,13 +166,12 @@ public class SmbUtils {
   }
 
   public static final boolean copyFileFromNetDrive(
-      final String account,
-      final String pwd,
+      final String ipOrDomain,
+      final NtlmPasswordAuthentication auth,
       final String srFile,
       final String dtFile,
       final boolean overWrite) throws IOException, InterruptedException {
-    final NtlmPasswordAuthentication auth = new NtlmPasswordAuthentication(null, account, pwd);
-    final SmbFile srcFile = toValidSmbFile(srFile, auth);
+    final SmbFile srcFile = toValidSmbFile(ipOrDomain, srFile, auth);
     final File destFile = new File(dtFile);
     CopyAction action = new CopyAction() {
       @Override
@@ -169,7 +188,7 @@ public class SmbUtils {
       public List<copyFileHandler> folderCopyThread() throws IOException {
         List<copyFileHandler> threadList = new ArrayList<copyFileHandler>();
         return depthCopyFromSmbFile(
-              srcFile, destFile, auth, threadList, overWrite);
+            srcFile, destFile, auth, threadList, overWrite);
       }
 
       @Override
@@ -179,6 +198,7 @@ public class SmbUtils {
         if (!finalDestFile.getName().equals(srcFileName)) {
           finalDestFile = new File(finalDestFile.getCanonicalPath() + File_SEP + srcFileName);
         }
+
         if (!finalDestFile.exists()) {
           finalDestFile.getParentFile().mkdirs();
         }
@@ -190,10 +210,8 @@ public class SmbUtils {
   }
 
   private static final boolean handleSmbFileCopy(
-      NtlmPasswordAuthentication
-      auth,
-      CopyAction
-      action,
+      NtlmPasswordAuthentication auth,
+      CopyAction action,
       boolean overWrite)
       throws IOException, InterruptedException {
     if (!overWrite && action.isDestExist()) {
@@ -221,16 +239,75 @@ public class SmbUtils {
 
   }
 
-  public static final void smbLogin(String ipAddress, String username, String password) {
+  public static final NtlmPasswordAuthentication smbLogin(String domainOrIpAddress, String username, String password)
+      throws UnknownHostException, SmbException {
+    NtlmPasswordAuthentication auth;
+    if (Strings.isNullOrEmpty(username)) {
+      auth = NtlmPasswordAuthentication.ANONYMOUS;
+    } else {
+      auth = new NtlmPasswordAuthentication(null, username, password);
+    }
+    UniAddress domain = UniAddress.getByName(domainOrIpAddress);
+    SmbSession.logon(domain, auth);
+    return auth;
+  }
+
+  public static final List<String> listSmbFileString(NtlmPasswordAuthentication auth, String domainOrIpAddress, String path)
+      throws MalformedURLException, SmbException {
+    List<String> fileList;
+    // String folderPath = "smb://" + domainOrIpAddress + "/" + (Strings.isNullOrEmpty(path) ? "" : path + "/");
+    String folderPath = resolvePath(domainOrIpAddress, path, true);
+    SmbFile smbFile = auth == null ? new SmbFile(folderPath) : new SmbFile(folderPath, auth);
+    fileList = Lists.newArrayList(smbFile.list());
+    return fileList;
+  }
+
+  private static final String resolvePath(String domainOrIpAddress, String path, boolean withProtocol) {
+    path = path.replace("\\", "/");
+    path = path.replaceAll("(?i)^smb:", "");
+    path = path.replaceAll("^[/]*", "");
+    if (!Strings.isNullOrEmpty(domainOrIpAddress)) {
+      path = path.replaceAll("\\Q" + domainOrIpAddress + "\\E/+", "");
+    }
+    if (withProtocol && !Strings.isNullOrEmpty(domainOrIpAddress)) {
+      path = "smb://" + domainOrIpAddress + "/" + (Strings.isNullOrEmpty(path) ? "" : path + "/");
+    }
+    return path;
+  }
+
+  public static final List<SmbFile> listSmbFile(NtlmPasswordAuthentication auth, String domainOrIpAddress, String path) {
+    List<SmbFile> fileList;
     try {
-      UniAddress domain = UniAddress.getByName(ipAddress);
-      NtlmPasswordAuthentication auth = new NtlmPasswordAuthentication(ipAddress, username, password);
-      SmbSession.logon(domain, auth);
+      // String folderPath = "smb://" + domainOrIpAddress + "/" + (Strings.isNullOrEmpty(path) ? "" : path + "/");
+      String folderPath = resolvePath(domainOrIpAddress, path, true);
+      SmbFile smbFile = auth == null ? new SmbFile(folderPath) : new SmbFile(folderPath, auth);
+      fileList = Lists.newArrayList(smbFile.listFiles());
+    } catch (Exception e) {
+      e.printStackTrace();
+      fileList = Lists.newArrayList();
+    }
+    return fileList;
+  }
+
+  public static SmbUrlInfo parseSmbUrl(String url) {
+    return SmbUrlInfo.parse(url);
+  }
+
+
+  public static void main(String[] args) {
+    try {
+      NtlmPasswordAuthentication auth = smbLogin("10.201.236.31", "administrator", "thirdbrigade");
+      for (String file : listSmbFileString(auth, "10.201.236.31", "trunk/build/DSM")) {
+        System.out.println(file);
+      }
+
     } catch (Exception e) {
       e.printStackTrace();
     }
   }
+
 }
+
 
 interface CopyAction {
   boolean isDestExist() throws IOException;
