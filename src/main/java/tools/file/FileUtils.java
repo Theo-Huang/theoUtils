@@ -196,8 +196,12 @@ public class FileUtils {
   public static final List<File> depthFindFiles(File defaultFile, final String filePattern, List<File> fileContainer) {
     String[] files = defaultFile.list();
     if (files == null || files.length == 0) {
+      if (defaultFile.getName().matches(filePattern) && !fileContainer.contains(defaultFile)) {
+        fileContainer.add(defaultFile);
+      }
       return fileContainer;
     }
+
     List<File> fList = getFileInFolder(defaultFile, filePattern, true);
     if (fList != null && !fList.isEmpty()) {
       fileContainer.addAll(fList);
@@ -213,6 +217,9 @@ public class FileUtils {
     File returnFile = null;
     String[] files = defaultFile.list();
     if (files == null || files.length == 0) {
+      if (defaultFile.getName().matches(filePattern)) {
+        return defaultFile;
+      }
       return null;
     }
     List<File> fList = getFileInFolder(defaultFile, filePattern, false);

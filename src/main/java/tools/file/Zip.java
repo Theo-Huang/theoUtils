@@ -87,19 +87,20 @@ public class Zip {
                 }
               } finally {
                 zout.closeEntry();
-                zout.close();
+//                zout.close();
               }
             }
           }
         }
       } finally {
-        res.close();
+//          res.close();
         TVFS.umount(target);
         if (out != null) {
           out.close();
         }
       }
     } catch (Exception ee) {
+      ee.printStackTrace();
       throw new IOException(ee);
     }
   }

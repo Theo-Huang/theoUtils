@@ -275,13 +275,28 @@ public class SmbUtils {
     return path;
   }
 
+  public static final SmbFile getSmbFile(NtlmPasswordAuthentication auth, String domainOrIpAddress, String path) {
+    try {
+      String filePath = resolvePath(domainOrIpAddress, path, true);
+      SmbFile smbFile = auth == null ? new SmbFile(filePath) : new SmbFile(filePath, auth);
+      return smbFile;
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return null;
+  }
+
   public static final List<SmbFile> listSmbFile(NtlmPasswordAuthentication auth, String domainOrIpAddress, String path) {
     List<SmbFile> fileList;
     try {
       // String folderPath = "smb://" + domainOrIpAddress + "/" + (Strings.isNullOrEmpty(path) ? "" : path + "/");
       String folderPath = resolvePath(domainOrIpAddress, path, true);
       SmbFile smbFile = auth == null ? new SmbFile(folderPath) : new SmbFile(folderPath, auth);
-      fileList = Lists.newArrayList(smbFile.listFiles());
+      if (smbFile.isFile()) {
+        fileList = Lists.newArrayList(smbFile);
+      } else {
+        fileList = Lists.newArrayList(smbFile.listFiles());
+      }
     } catch (Exception e) {
       e.printStackTrace();
       fileList = Lists.newArrayList();

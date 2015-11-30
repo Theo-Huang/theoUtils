@@ -12,32 +12,51 @@ import de.schlichtherle.truezip.zip.ZipOutputStream;
 public class ZipUtils {
 
   static void copy(InputStream in, OutputStream out) throws IOException {
-    byte[] buffer = new byte[1024];
-    while (true) {
-      int readCount = in.read(buffer);
-      if (readCount < 0) {
-        break;
+    copy(in, out, true, true);
+  }
+
+  static void copy(InputStream in, OutputStream out, boolean closeInput, boolean closeOutput) throws IOException {
+    try {
+      byte[] buffer = new byte[1024];
+      while (true) {
+        int readCount = in.read(buffer);
+        if (readCount < 0) {
+          break;
+        }
+        out.write(buffer, 0, readCount);
       }
-      out.write(buffer, 0, readCount);
+    } finally {
+      if (in != null && closeInput) {
+        in.close();
+      }
+      if (out != null && closeOutput) {
+        out.close();
+      }
     }
   }
+
+
 
   static void copy(TFile file, ZipOutputStream out) throws IOException {
-    TFileInputStream in = new TFileInputStream(file);
-    try {
-      copy(in, out);
-    } finally {
-      in.close();
-    }
+    copy(file, out, true, true);
   }
 
-  static void copy(InputStream in, TFile file) throws IOException {
-    OutputStream out = new TFileOutputStream(file);
-    try {
-      copy(in, out);
-    } finally {
-      out.close();
-    }
+
+  static void copy(TFile file, ZipOutputStream out, boolean closeInput, boolean closeOutput) throws IOException {
+    TFileInputStream in = new TFileInputStream(file);
+    copy(in, out, closeInput, closeOutput);
   }
+
+
+  static void copy(InputStream in, TFile file) throws IOException {
+    copy(in, file, true, true);
+  }
+
+
+  static void copy(InputStream in, TFile file, boolean closeInput, boolean closeOutput) throws IOException {
+    OutputStream out = new TFileOutputStream(file);
+    copy(in, out, closeInput, closeOutput);
+  }
+
 
 }

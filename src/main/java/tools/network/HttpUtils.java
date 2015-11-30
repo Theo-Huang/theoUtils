@@ -3,6 +3,7 @@ package tools.network;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -25,11 +26,14 @@ import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import org.apache.commons.httpclient.HttpException;
 import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.AuthenticationException;
@@ -37,7 +41,9 @@ import org.apache.http.auth.Credentials;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
@@ -46,9 +52,11 @@ import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.jackrabbit.webdav.client.methods.MkColMethod;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 
 import tools.system.SystemUtils;
 import exception.NotFoundException;
@@ -79,6 +87,16 @@ public class HttpUtils {
       e.printStackTrace();
     }
     return false;
+  }
+
+  public static final void setSSLVerifyAlwaysPass() {
+    HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier() {
+
+      @Override
+      public boolean verify(String arg0, SSLSession arg1) {
+        return true;
+      }
+    });
   }
 
   public static final boolean ping(String host) {
@@ -180,6 +198,14 @@ public class HttpUtils {
     return urlParameters;
   }
 
+  public static final Map<String, String> getBasicAuthRequestPropertiesMap(String account, String pass) {
+    Map<String, String> headerMap = Maps.newHashMap();
+    tools.code.Base64 b64 = new tools.code.Base64();
+    String encoding = b64.encode(account + ":" + pass);
+    headerMap.put("Authorization", "Basic " + encoding);
+    return headerMap;
+  }
+
   public static final void postMethod(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
     String postContent;
     if (httpRequestCapabilities.getRequestPostParameters() != null &&
@@ -244,16 +270,68 @@ public class HttpUtils {
     return handleRequestResultInString(httpRequestCapabilities);
   }
 
+  public static final String headMethod(String targetURL) throws IOException {
+    HttpRequestCapabilities httpRequestCapabilities = new HttpRequestCapabilities(targetURL);
+    headMethod(httpRequestCapabilities);
+    return handleRequestResultInString(httpRequestCapabilities);
+  }
+
+  public static final void headMethod(HttpRequestCapabilities httpRequestCapabilities) throws IOException {
+    HttpURLConnection conn = null;
+    URL url;
+    try {
+      // Create connection
+      url = new URL(urlDecode(httpRequestCapabilities.getUrl()));
+      conn = (HttpURLConnection) url.openConnection();
+      if (!httpRequestCapabilities.isKeepAlive()) {
+        conn.setRequestProperty("connection", "close");
+        conn.setRequestProperty("Connection", "close");
+      }
+      conn.setInstanceFollowRedirects(httpRequestCapabilities.getFollowRedirects());
+      conn.setRequestMethod("HEAD");
+      if (httpRequestCapabilities.getRequestProperties() == null ||
+          httpRequestCapabilities.getRequestProperties().isEmpty()) {
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        conn.setRequestProperty("Content-Language", "en-US");
+      } else {
+        for (Entry<String, String> entry : httpRequestCapabilities.getRequestProperties().entrySet()) {
+          conn.setRequestProperty(entry.getKey(), entry.getValue());
+        }
+      }
+      conn.setUseCaches(false);
+      conn.setDoInput(true);
+      conn.setDoOutput(true);
+      // Send request
+    } catch (IOException e) {
+      throw e;
+    } finally {
+      handleRequestResult(conn, httpRequestCapabilities);
+      if (conn != null) {
+        conn.disconnect();
+      }
+    }
+
+  }
+
   private static final void handleRequestResult(HttpURLConnection conn, HttpRequestCapabilities httpRequestCapabilities) throws IOException {
     InputStream is;
     if (conn.getResponseCode() >= 400) {
       is = conn.getErrorStream();
+      if (is == null) {
+        is = conn.getInputStream();
+      }
     } else {
       is = conn.getInputStream();
+      if (is == null) {
+        is = conn.getErrorStream();
+      }
     }
+
     try {
-      String returnStr = readInputStream(is);
-      httpRequestCapabilities.setResponseContent(returnStr);
+      if (is != null) {
+        String returnStr = readInputStream(is);
+        httpRequestCapabilities.setResponseContent(returnStr);
+      }
       httpRequestCapabilities.setResponseCode(conn.getResponseCode());
       httpRequestCapabilities.setResponseHeaderMap(conn.getHeaderFields());
       httpRequestCapabilities.setResponseMessage(conn.getResponseMessage());
@@ -318,6 +396,54 @@ public class HttpUtils {
   // return handlePostResult(httpClient.execute(request));
   // }
 
+  public static final int MkCol(String urlStr, String userName, String password) throws HttpException, IOException {
+    URL url = new URL(urlStr);
+    org.apache.commons.httpclient.HostConfiguration hostConfig = new org.apache.commons.httpclient.HostConfiguration();
+    hostConfig.setHost(url.getHost(), url.getPort() <= 0 ? 80 : url.getPort());
+
+    org.apache.commons.httpclient.HttpConnectionManager connectionManager =
+        new org.apache.commons.httpclient.SimpleHttpConnectionManager();
+    org.apache.commons.httpclient.params.HttpConnectionManagerParams params =
+        new org.apache.commons.httpclient.params.HttpConnectionManagerParams();
+    int maxHostConnections = 20;
+    params.setMaxConnectionsPerHost(hostConfig, maxHostConnections);
+    connectionManager.setParams(params);
+
+    org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
+
+    org.apache.commons.httpclient.Credentials credentials =
+        new org.apache.commons.httpclient.UsernamePasswordCredentials(userName, password);
+
+    httpClient.getState().setCredentials(org.apache.commons.httpclient.auth.AuthScope.ANY, credentials);
+    MkColMethod mkColMethod = new MkColMethod(urlStr);
+    mkColMethod.setDoAuthentication(true);
+    return httpClient.executeMethod(mkColMethod);
+
+  }
+
+  public static final int MkCol(String urlStr) throws HttpException, IOException {
+
+    URL url = new URL(urlStr);
+    org.apache.commons.httpclient.HostConfiguration hostConfig = new org.apache.commons.httpclient.HostConfiguration();
+    hostConfig.setHost(url.getHost(), url.getPort() <= 0 ? 80 : url.getPort());
+
+    org.apache.commons.httpclient.HttpConnectionManager connectionManager =
+        new org.apache.commons.httpclient.SimpleHttpConnectionManager();
+
+    org.apache.commons.httpclient.params.HttpConnectionManagerParams params =
+        new org.apache.commons.httpclient.params.HttpConnectionManagerParams();
+    int maxHostConnections = 20;
+    params.setMaxConnectionsPerHost(hostConfig, maxHostConnections);
+    connectionManager.setParams(params);
+
+    org.apache.commons.httpclient.HttpClient httpClient = new org.apache.commons.httpclient.HttpClient(connectionManager);
+
+
+    MkColMethod mkColMethod = new MkColMethod(urlStr);
+    mkColMethod.setDoAuthentication(true);
+    return httpClient.executeMethod(mkColMethod);
+  }
+
   public static final String postUploadFile(String url, File file, String userName, String password) throws IOException, AuthenticationException {
     CloseableHttpClient httpClient = HttpClients.createDefault();
 
@@ -349,6 +475,37 @@ public class HttpUtils {
 
   public static final String postUploadFile(URL url, File file) throws IOException {
     return postUploadFile(url.toExternalForm(), file);
+  }
+
+  public static final String putUploadFile(String url, File file) throws IOException {
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpPut put = new HttpPut(url);
+    MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+    builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+    builder.addPart("file", new FileBody(file));
+    put.setEntity(builder.build());
+    return handlePostResult(httpClient.execute(put));
+  }
+
+  public static final String putUploadFile(String url, File file, String userName, String password)
+      throws IOException, AuthenticationException {
+
+    Credentials credentials =
+        new UsernamePasswordCredentials(userName, password);
+    CredentialsProvider credsProvider = new BasicCredentialsProvider();
+    credsProvider.setCredentials(AuthScope.ANY, credentials);
+    HttpClientContext context = HttpClientContext.create();
+    context.setCredentialsProvider(credsProvider);
+
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpPut put = new HttpPut(url);
+    put.addHeader(new BasicScheme().authenticate(credentials, put, context));
+
+    MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+    builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+    builder.addPart("file", new FileBody(file));
+    put.setEntity(builder.build());
+    return handlePostResult(httpClient.execute(put));
   }
 
   private static final String handlePostResult(HttpResponse response) throws IllegalStateException, IOException {
@@ -461,4 +618,28 @@ public class HttpUtils {
     }
     throw new UtilityException("No usable port .");
   }
+
+  public static final boolean downloadFile(String fileUrl, FileOutputStream fos)
+      throws IllegalStateException, ClientProtocolException, IOException {
+    return downloadFile(null, null, fileUrl, fos);
+  }
+
+  public static final boolean downloadFile(String account, String password, String fileUrl, FileOutputStream fos)
+      throws IllegalStateException, ClientProtocolException, IOException {
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpClientContext context = HttpClientContext.create();
+    if (account != null && !account.isEmpty()) {
+      CredentialsProvider credsProvider = new BasicCredentialsProvider();
+      UsernamePasswordCredentials credentials =
+          new UsernamePasswordCredentials(
+              account,
+              password);
+      credsProvider.setCredentials(AuthScope.ANY, credentials);
+      context.setCredentialsProvider(credsProvider);
+    }
+
+    HttpGet get = new HttpGet(fileUrl);
+    return tools.file.FileUtils.copyFileStream(httpClient.execute(get, context).getEntity().getContent(), fos);
+  }
+
 }
